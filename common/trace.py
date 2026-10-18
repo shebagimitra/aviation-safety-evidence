@@ -45,15 +45,24 @@ def trace(component: str, message: str, /, **fields: Any) -> None:
     # STEP 2: Emit formatted log line to stdout | takes: log_line | gives: console output
     print(log_line, flush=True)
 
-    # STEP 3: Append log entry to data/trace.log | takes: log_line | gives: persisted file entry
+    
+    # STEP 3: Append log entry to a writable trace file
     try:
-        data_dir = os.environ.get("DATA_DIR", "data")
-        log_path = Path(data_dir) / "trace.log"
+        if os.environ.get("VERCEL") == "1":
+            log_path = Path("/tmp/trace.log")
+        else:
+            data_dir = os.environ.get("DATA_DIR", "data")
+            log_path = Path(data_dir) / "trace.log"
+
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(log_line + "\n")
     except Exception as exc:
-        raise ComponentError(component, "append_trace_log", f"Failed writing to trace log at {log_path}: {exc}") from exc
+        raise ComponentError(
+            component,
+            "append_trace_log",
+            f"Failed writing trace log at {log_path}: {exc}"
+        ) from exc
 
 
 def run_selftest() -> None:
