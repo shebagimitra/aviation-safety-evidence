@@ -59,7 +59,7 @@ def chat(
     max_tokens: int = 2000,
     json_schema: Optional[dict[str, Any]] = None,
     thinking: Optional[bool] = None,
-    timeout_s: float = 120.0,
+    timeout_s: float = 600.0,
     settings: Optional[Settings] = None,
 ) -> LLMResult:
     """IN: List of message dictionaries, temperature, max_tokens, json_schema, thinking, timeout_s, optional Settings.

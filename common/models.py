@@ -55,6 +55,15 @@ class DocumentManifest(BaseModel):
     case_id: str = Field(description="Identifier of associated aviation case")
     split: SplitType = Field(description="Evaluation split: prediction or truth")
     notes: str = Field(description="Contextual or provenance notes")
+    evidence_role: Optional[
+        Literal[
+            "observation",
+            "official_finding",
+            "recommendation",
+            "guidance",
+            "corrective_action",
+        ]
+    ] = Field(default=None, description="Optional default evidence role for extracted passages")
 
 
 DocumentManifestList = RootModel[list[DocumentManifest]]
@@ -164,15 +173,15 @@ class Assessment(BaseModel):
     """Structured assessment produced by reasoning engine grounded in EvidencePack."""
     model_config = ConfigDict(extra="forbid")
 
-    case_id: str = Field(description="Case identifier")
-    selected_component: str = Field(description="Target aircraft component evaluated")
+    case_id: str = Field(default="", description="Case identifier")
+    selected_component: str = Field(default="", description="Target aircraft component evaluated")
     brief_summary: str = Field(description="Concise evidence-grounded summary")
     evidence_status: EvidenceStatus = Field(description="Overall evidence assessment status")
     hypotheses: list[Hypothesis] = Field(default_factory=list, description="Evaluated hypotheses")
     documented_findings: list[DocumentedFinding] = Field(default_factory=list, description="Authoritative factual findings")
     missing_information: list[str] = Field(default_factory=list, description="Missing records or data needed")
     suggested_investigative_checks: list[SuggestedCheck] = Field(default_factory=list, description="Suggested next steps")
-    component_summaries: dict[str, ComponentSummary] = Field(description="Status map for schematic components")
+    component_summaries: dict[str, ComponentSummary] = Field(default={}, description="Status map for schematic components")
     overall_limitations: list[str] = Field(default_factory=list, description="High-level disclaimers and limitations")
 
 

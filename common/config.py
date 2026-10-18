@@ -2,7 +2,7 @@
 # COMPONENT: C0 - Common Configuration Loader
 # PURPOSE: Load and validate environment settings from .env into a typed Settings object.
 # INPUT: .env file or system environment variables.
-# OUTPUT: Typed Settings instance exposing validated configuration attributes.
+# OUTPUT: Typed Settings instance and resolved data directory Path.
 # CALLED BY: All pipeline components (C1-C7)      CALLS: common/trace.py, python-dotenv, pydantic
 # IF IT BREAKS, CHECK: Missing required variables in .env, invalid DATA_DIR path permissions.
 # ============================================================
@@ -10,7 +10,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
@@ -142,6 +142,28 @@ def get_settings(env_path: Optional[Path | str] = None) -> Settings:
     return _cached_settings
 
 
+def get_data_dir() -> Path:
+    """IN: None (reads DATA_DIR environment variable).
+    OUT: Resolved data directory Path relative to project root.
+    FAILS WITH: ComponentError on path resolution failure."""
+    try:
+        # STEP 1: Read DATA_DIR from environment with fallback | takes: os.environ | gives: raw_path
+        raw_val = os.environ.get("DATA_DIR")
+        raw_data_dir = raw_val.strip() if raw_val and raw_val.strip() else "data"
+        raw_path = Path(raw_data_dir)
+
+        # STEP 2: Resolve path relative to project root | takes: raw_path, __file__ | gives: resolved_path
+        project_root = Path(__file__).resolve().parent.parent
+        resolved_path = (project_root / raw_path).resolve()
+        trace("C0", "Resolved data directory", raw=str(raw_path), resolved=str(resolved_path))
+
+        return resolved_path
+    except ComponentError:
+        raise
+    except Exception as exc:
+        raise ComponentError("C0", "get_data_dir", f"Failed resolving data directory: {exc}") from exc
+
+
 def __getattr__(name: str) -> Any:
     """IN: Attribute name requested on module.
     OUT: Module attribute or lazy-evaluated Settings instance.
@@ -180,6 +202,34 @@ def run_selftest() -> None:
         if test_settings.LLM_MODEL != "mock_llm_model":
             print("FAIL: Setting value mismatch")
             sys.exit(1)
+
+        # STEP 3: Verify get_data_dir() works with every other variable unset | takes: isolated environment | gives: verified Path
+        for var in REQUIRED_VARS:
+            os.environ.pop(var, None)
+
+        project_root = Path(__file__).resolve().parent.parent
+        expected_default = (project_root / "data").resolve()
+        resolved_default = get_data_dir()
+        if resolved_default != expected_default:
+            print(f"FAIL: Default data dir mismatch: {resolved_default} != {expected_default}")
+            sys.exit(1)
+
+        os.environ["DATA_DIR"] = "custom_data"
+        expected_custom = (project_root / "custom_data").resolve()
+        resolved_custom = get_data_dir()
+        if resolved_custom != expected_custom:
+            print(f"FAIL: Custom data dir mismatch: {resolved_custom} != {expected_custom}")
+            sys.exit(1)
+
+        saved_cwd = Path.cwd()
+        try:
+            os.chdir(project_root.parent)
+            resolved_from_parent = get_data_dir()
+            if resolved_from_parent != expected_custom:
+                print(f"FAIL: Relative resolution failed from different cwd: {resolved_from_parent}")
+                sys.exit(1)
+        finally:
+            os.chdir(saved_cwd)
 
         print("PASS")
     except Exception as exc:
